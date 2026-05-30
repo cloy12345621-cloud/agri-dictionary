@@ -12,17 +12,15 @@ st.set_page_config(
 # 2. 데이터 불러오기 함수 (초기 1회만 로드하여 속도 최적화)
 @st.cache_data
 def load_data():
-    # 데이터 구조: ROW_NUM, CL_NM, LEGACY_WORD_NM, SRCLANG_NM, EASY_WORD_NM
-    # 실제 연동 시 파일 경로를 맞추거나 Open API 호출 코드로 대체할 수 있습니다.
     try:
+        # 업로드된 CSV 파일을 읽어옵니다.
         df = pd.read_csv("농업용어사전2.csv")
     except:
-        # 파일이 없을 경우를 대비한 샘플 데이터 (테스트용)
+        # 파일 로드 실패 시 작동할 백업 샘플 데이터
         data = {
-            "CL_NM": ["농업기반", "농업기반", "농작물", "농작물", "농작물"],
-            "LEGACY_WORD_NM": ["관정", "몽리면적", "과경", "과숙", "포복경"],
-            "SRCLANG_NM": ["管井", "夢利面積", "果梗", "過熟", "匍匐莖"],
-            "EASY_WORD_NM": ["우물", "물댈 면적", "열매꼭지", "농익음", "기는 줄기"]
+            "분류": ["농업기반", "농업기반", "농작물", "농작물", "농작물"],
+            "순화 전 농업용어": ["관정", "몽리면적", "과경", "과숙", "포복경"],
+            "순화 데이터(추천어)": ["우물", "물댈 면적", "열매꼭지", "농익음", "기는 줄기"]
         }
         df = pd.DataFrame(data)
     return df
@@ -39,8 +37,8 @@ def get_chosung(text):
         return CHOSUNG_LIST[code // 588]
     return text[0]
 
-# 데이터에 초성 열 추가
-df['CHOSUNG'] = df['LEGACY_WORD_NM'].apply(get_chosung)
+# 실제 엑셀 파일의 '순화 전 농업용어' 열을 기준으로 초성을 만듭니다.
+df['CHOSUNG'] = df['순화 전 농업용어'].apply(get_chosung)
 
 # 4. 헤더 및 기획 의도 소개 (깔끔하고 신뢰감 주는 UI)
 st.title("🌱 바른 농업용어 사전")
@@ -54,15 +52,16 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# 5. 검색창 UI (가장 상단에 배치하여 직관성 제공)
-search_query = st.text_input("🔍 검색할 농업 용어를 입력하세요 (예: 관정, 과숙, 물대기 등)", "").strip()
+# 5. 검색창 UI
+search_query = st.text_input("🔍 검색할 농업 용어를 입력하세요 (예: 관정, 과숙 등)", "").strip()
 
 # 6. 카테고리(분류) 및 자음 필터
 st.markdown("---")
 col1, col2 = st.columns([1, 2])
 
 with col1:
-    categories = ["전체"] + sorted(df['CL_NM'].dropna().unique().tolist())
+    # 엑셀의 '분류' 열 데이터를 연동합니다.
+    categories = ["전체"] + sorted(df['분류'].dropna().unique().tolist())
     selected_category = st.selectbox("📁 분류 선택", categories)
 
 with col2:
@@ -73,15 +72,15 @@ with col2:
 filtered_df = df.copy()
 
 if selected_category != "전체":
-    filtered_df = filtered_df[filtered_df['CL_NM'] == selected_category]
+    filtered_df = filtered_df[filtered_df['분류'] == selected_category]
 
 if selected_chosung != "전체":
     filtered_df = filtered_df[filtered_df['CHOSUNG'] == selected_chosung]
 
 if search_query:
     filtered_df = filtered_df[
-        filtered_df['LEGACY_WORD_NM'].str.contains(search_query, case=False, na=False) |
-        filtered_df['EASY_WORD_NM'].str.contains(search_query, case=False, na=False)
+        filtered_df['순화 전 농업용어'].str.contains(search_query, case=False, na=False) |
+        filtered_df['순화 데이터(추천어)'].str.contains(search_query, case=False, na=False)
     ]
 
 # 8. 결과 출력 (사전식 UI 카드 배치)
@@ -91,24 +90,10 @@ if filtered_df.empty:
     st.info("검색 결과가 없습니다. 다른 단어를 입력하거나 필터를 변경해 보세요.")
 else:
     for _, row in filtered_df.iterrows():
-        # 사전 한 칸 한 칸을 가독성 좋은 프레임으로 구성
+        # 파일에 한자 열(SRCLANG_NM)이 없을 수도 있으므로 안전하게 처리합니다.
+        hanja_text = f"({row['한자']})" if '한자' in row and pd.notna(row['한자']) else ""
+        
         with st.container():
             st.markdown(
                 f"""
-                <div style="background-color: #f9f9f9; padding: 18px; border-radius: 8px; border-left: 5px solid #2E7D32; margin-bottom: 12px;">
-                    <span style="font-size: 12px; background-color: #E8F5E9; color: #2E7D32; padding: 3px 8px; border-radius: 4px; font-weight: bold;">{row['CL_NM']}</span>
-                    <h3 style="margin: 10px 0 5px 0; color: #111111;">
-                        {row['LEGACY_WORD_NM']} 
-                        <span style="font-size: 14px; color: #888888; font-weight: normal;">({row['SRCLANG_NM']})</span>
-                    </h3>
-                    <p style="margin: 5px 0 0 0; font-size: 16px; color: #2E7D32; font-weight: bold;">
-                        💡 추천 순화어: <span style="font-size: 18px;">{row['EASY_WORD_NM']}</span>
-                    </p>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-# 후면 푸터
-st.markdown("---")
-st.caption("© 2026 바른 농업용어 사전 프로젝트. All rights reserved.")
+                <div style="background-color: #f9f
