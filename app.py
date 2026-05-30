@@ -15,7 +15,7 @@ def load_data():
     # 데이터 구조: ROW_NUM, CL_NM, LEGACY_WORD_NM, SRCLANG_NM, EASY_WORD_NM
     # 실제 연동 시 파일 경로를 맞추거나 Open API 호출 코드로 대체할 수 있습니다.
     try:
-        df = pd.read_csv("농업용어사전2.xlsx - Sheet1.csv")
+        df = pd.read_excel("농업용어사전2.xlsx")
     except:
         # 파일이 없을 경우를 대비한 샘플 데이터 (테스트용)
         data = {
