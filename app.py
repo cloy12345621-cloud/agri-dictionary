@@ -9,14 +9,24 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. 데이터 불러오기 함수 (초기 1회만 로드하여 속도 최적화)
+# 2. 데이터 불러오기 함수 (한국어 인코딩 깨짐 및 예외 처리 완벽 방어)
 @st.cache_data
 def load_data():
-    try:
-        # 업로드된 CSV 파일을 읽어옵니다.
-        df = pd.read_csv("농업용어사전2.csv")
-    except:
-        # 파일 로드 실패 시 작동할 백업 샘플 데이터
+    # 윈도우 엑셀 CSV의 다양한 인코딩 형식을 순차적으로 시도합니다.
+    encodings = ["utf-8-sig", "cp949", "euc-kr", "utf-8"]
+    df = None
+    
+    for enc in encodings:
+        try:
+            df = pd.read_csv("농업용어사전2.csv", encoding=enc)
+            # 파일은 읽었으나 실제 데이터 열이 정상인지 검증
+            if "순화 전 농업용어" in df.columns:
+                break
+        except:
+            continue
+            
+    # 모든 인코딩 시도가 실패하거나 파일이 없을 경우 작동할 백업 샘플 데이터
+    if df is None or "순화 전 농업용어" not in df.columns:
         data = {
             "분류": ["농업기반", "농업기반", "농작물", "농작물", "농작물"],
             "순화 전 농업용어": ["관정", "몽리면적", "과경", "과숙", "포복경"],
@@ -40,7 +50,7 @@ def get_chosung(text):
 # 실제 엑셀 파일의 '순화 전 농업용어' 열을 기준으로 초성을 만듭니다.
 df['CHOSUNG'] = df['순화 전 농업용어'].apply(get_chosung)
 
-# 4. 헤더 및 기획 의도 소개 (깔끔하고 신뢰감 주는 UI)
+# 4. 헤더 및 기획 의도 소개
 st.title("🌱 바른 농업용어 사전")
 st.markdown(
     """
@@ -90,10 +100,26 @@ if filtered_df.empty:
     st.info("검색 결과가 없습니다. 다른 단어를 입력하거나 필터를 변경해 보세요.")
 else:
     for _, row in filtered_df.iterrows():
-        # 파일에 한자 열(SRCLANG_NM)이 없을 수도 있으므로 안전하게 처리합니다.
+        # 파일에 한자 열이 없을 수도 있으므로 안전하게 처리합니다.
         hanja_text = f"({row['한자']})" if '한자' in row and pd.notna(row['한자']) else ""
         
         with st.container():
             st.markdown(
                 f"""
-                <div style="background-color: #f9f
+                <div style="background-color: #f9f9f9; padding: 18px; border-radius: 8px; border-left: 5px solid #2E7D32; margin-bottom: 12px;">
+                    <span style="font-size: 12px; background-color: #E8F5E9; color: #2E7D32; padding: 3px 8px; border-radius: 4px; font-weight: bold;">{row['분류']}</span>
+                    <h3 style="margin: 10px 0 5px 0; color: #111111;">
+                        {row['순화 전 농업용어']} 
+                        <span style="font-size: 14px; color: #888888; font-weight: normal;">{hanja_text}</span>
+                    </h3>
+                    <p style="margin: 5px 0 0 0; font-size: 16px; color: #2E7D32; font-weight: bold;">
+                        💡 추천 순화어: <span style="font-size: 18px;">{row['순화 데이터(추천어)']}</span>
+                    </p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+# 후면 푸터
+st.markdown("---")
+st.caption("© 2026 바른 농업용어 사전 프로젝트. All rights reserved.")
